@@ -2,39 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build-test-docker:
     runs-on: ubuntu-latest
 
     env:
-      DB_HOST: localhost
-      DB_PORT: 5432
-      DB_NAME: ${{ secrets.DB_NAME }}
-      DB_USER: ${{ secrets.DB_USER }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
       TEST_BASE_URL: http://localhost:8080
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U ${{ secrets.POSTGRES_USER }} -d ${{ secrets.POSTGRES_DB }}"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
 
     steps:
       - name: Checkout repository
@@ -46,21 +23,51 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore ./lab2.sln
 
       - name: Build solution
-        run: dotnet build --no-restore
+        run: dotnet build ./lab2.sln --no-restore
 
-      - name: Start API in background
+      - name: Create .env for Docker Compose
         run: |
-          dotnet run --project ./lab2/lab2.csproj --urls=http://localhost:8080 &
-          sleep 20
+          cat > ./lab2/.env <<EOF
+          DB_HOST=db
+          DB_PORT=5432
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          EOF
 
-      - name: Check health endpoint
-        run: curl http://localhost:8080/health
+      - name: Start containers
+        working-directory: ./lab2
+        run: docker compose up --build -d
+
+      - name: Wait for API health
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8080/health; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "API did not become healthy in time"
+          docker ps
+          exit 1
 
       - name: Run functional tests
+        env:
+          TEST_BASE_URL: http://localhost:8080
         run: dotnet test ./lab2.Tests/lab2.Tests.csproj --no-build --verbosity normal
 
-      - name: Build Docker image
-        run: docker build -t lab2-app ./lab2
+      - name: Show container logs on failure
+        if: failure()
+        working-directory: ./lab2
+        run: docker compose logs
+
+      - name: Stop containers
+        if: always()
+        working-directory: ./lab2
+        run: docker compose down -v
