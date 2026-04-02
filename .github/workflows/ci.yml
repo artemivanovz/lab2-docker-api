@@ -60,7 +60,7 @@ jobs:
       - name: Run functional tests
         env:
           TEST_BASE_URL: http://localhost:8080
-        run: dotnet test ./lab2.Tests/lab2.Tests.csproj --no-build --verbosity normal
+        run: dotnet test ./lab2.Tests/lab2.Tests/lab2.Tests.csproj --no-build --verbosity normal
 
       - name: Show container logs on failure
         if: failure()
