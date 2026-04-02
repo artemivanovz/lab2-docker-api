@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +7,7 @@ var port = Environment.GetEnvironmentVariable("DB_PORT") ?? "5432";
 var database = Environment.GetEnvironmentVariable("DB_NAME") ?? "studentsdb";
 var username = Environment.GetEnvironmentVariable("DB_USER") ?? "postgres";
 var password = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "postgres";
+var nodeName = Environment.GetEnvironmentVariable("NODE_NAME") ?? "Unknown node";
 
 var connectionString =
     $"Host={host};Port={port};Database={database};Username={username};Password={password}";
@@ -23,7 +23,63 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// -------------------- Service endpoints --------------------
+
 app.MapHealthChecks("/health");
+
+app.MapGet("/", () =>
+{
+    var html = $@"
+<!DOCTYPE html>
+<html lang='ru'>
+<head>
+<meta charset='utf-8'>
+<title>Lab 4 Node</title>
+
+<style>
+body {{
+    margin:0;
+    font-family:Arial;
+    background:#f4f6f8;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}}
+
+.card {{
+    background:white;
+    padding:40px;
+    border-radius:15px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.15);
+    text-align:center;
+}}
+
+h1 {{
+    font-size:40px;
+    margin:0;
+}}
+</style>
+
+</head>
+
+<body>
+
+<div class='card'>
+<h1>{nodeName}</h1>
+<p>Active node</p>
+</div>
+
+</body>
+
+</html>";
+
+    return Results.Content(html, "text/html");
+});
+
+app.MapGet("/node", () => Results.Ok(new { node = nodeName }));
+
+// -------------------- API endpoints --------------------
 
 app.MapGet("/groups", async (AppDbContext db) =>
     await db.Groups
@@ -47,6 +103,7 @@ app.MapGet("/students", async (AppDbContext db) =>
             GroupName = s.Group != null ? s.Group.Name : null
         })
         .ToListAsync());
+
 app.MapPost("/groups", async (AppDbContext db, Group group) =>
 {
     var newGroup = new Group
@@ -110,7 +167,19 @@ app.MapGet("/students/sort", async (AppDbContext db, string field = "Id", string
         _ => q.OrderByDescending(s => s.Id)
     };
 
-    return Results.Ok(await q.ToListAsync());
+    var result = await q
+        .Select(s => new
+        {
+            s.Id,
+            s.FullName,
+            s.RecordBookNumber,
+            s.Score,
+            s.GroupId,
+            GroupName = s.Group != null ? s.Group.Name : null
+        })
+        .ToListAsync();
+
+    return Results.Ok(result);
 });
 
 app.MapGet("/students/filter", async (AppDbContext db, string field, string op, string value) =>
@@ -140,8 +209,22 @@ app.MapGet("/students/filter", async (AppDbContext db, string field, string op, 
             q = q.Where(s => s.Score == x);
     }
 
-    return Results.Ok(await q.ToListAsync());
+    var result = await q
+        .Select(s => new
+        {
+            s.Id,
+            s.FullName,
+            s.RecordBookNumber,
+            s.Score,
+            s.GroupId,
+            GroupName = s.Group != null ? s.Group.Name : null
+        })
+        .ToListAsync();
+
+    return Results.Ok(result);
 });
+
+// -------------------- DB init --------------------
 
 using (var scope = app.Services.CreateScope())
 {
@@ -158,7 +241,6 @@ using (var scope = app.Services.CreateScope())
         db.SaveChanges();
 
         db.Students.AddRange(
-
             new Student
             {
                 FullName = "Ivan Ivanov",
@@ -166,7 +248,6 @@ using (var scope = app.Services.CreateScope())
                 Score = 70,
                 GroupId = g1.Id
             },
-
             new Student
             {
                 FullName = "Petr Petrov",
@@ -184,6 +265,8 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.Run();
+
+public partial class Program { }
 
 public class Group
 {

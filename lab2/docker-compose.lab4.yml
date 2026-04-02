@@ -1,0 +1,85 @@
+﻿version: "3.9"
+
+services:
+  app1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lab4_app1
+    environment:
+      NODE_NAME: "Нода 1"
+      ASPNETCORE_URLS: "http://+:8080"
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: studentsdb
+      DB_USER: studentuser
+      DB_PASSWORD: strongpassword123
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lab4_app2
+    environment:
+      NODE_NAME: "Нода 2"
+      ASPNETCORE_URLS: "http://+:8080"
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: studentsdb
+      DB_USER: studentuser
+      DB_PASSWORD: strongpassword123
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lab4_app3
+    environment:
+      NODE_NAME: "Нода 3"
+      ASPNETCORE_URLS: "http://+:8080"
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: studentsdb
+      DB_USER: studentuser
+      DB_PASSWORD: strongpassword123
+    depends_on:
+      db:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:latest
+    container_name: lab4_nginx
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app1
+      - app2
+      - app3
+
+  db:
+    image: postgres:16
+    container_name: lab4_db
+    environment:
+      POSTGRES_DB: studentsdb
+      POSTGRES_USER: studentuser
+      POSTGRES_PASSWORD: strongpassword123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_lab4:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studentuser -d studentsdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data_lab4:
