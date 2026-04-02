@@ -56,7 +56,8 @@ jobs:
           echo "API did not become healthy in time"
           docker ps
           exit 1
-
+      - name: Show repo structure
+        run: find . -name "*.csproj"
       - name: Run functional tests
         env:
           TEST_BASE_URL: http://localhost:8080
